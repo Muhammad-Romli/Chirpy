@@ -2,15 +2,20 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
+	"sync/atomic"
 )
+
+type apiConfig struct {
+	fileserverHits atomic.Int32
+}
 
 func main() {
 	fmt.Printf("Hello, World!")
 	serverMux := http.NewServeMux()
-	serverMux.HandleFunc("/", readinessHandle)
+	serverMux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir("."))))
+	serverMux.HandleFunc("/healthz", readinessHandle)
 	server := http.Server{
 		Handler: serverMux,
 		Addr:    ":8080",
@@ -22,13 +27,10 @@ func main() {
 }
 
 func readinessHandle(respWriter http.ResponseWriter, req *http.Request) {
-	data, err := io.ReadAll(req.Body)
+	respWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	respWriter.WriteHeader(http.StatusOK)
+	_, err := respWriter.Write([]byte(http.StatusText(http.StatusOK)))
 	if err != nil {
-		log.Fatalf("fail reading request body: %w", err)
-	}
-	respWriter.WriteHeader(200)
-	_, err = respWriter.Write(data)
-	if err != nil {
-		log.Fatalf("fail writing data: %w", err)
+		log.Printf("fail writing response: %v", err)
 	}
 }
