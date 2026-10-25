@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -55,15 +56,19 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
+	if os.Getenv("PLATFORM") != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("Reset is only allowed in dev environment."))
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	count := cfg.FileServerHits.Load()
 	cfg.FileServerHits.Add(-count)
 	_, err := w.Write([]byte("FileServerHits count reseted."))
-	if err != nil {
-		w.WriteHeader(500)
-		log.Printf("Fail writing response: %v", err)
-	}
+	respError(w, fmt.Sprintf("Fail writing response: %v", err), 500)
+	err = cfg.DbQueries.ResetUsers(req.Context())
+	respError(w, fmt.Sprintf("fail resetting users in database: %v", err), 500)
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
@@ -106,6 +111,7 @@ func decodeReq(w http.ResponseWriter, req *http.Request, params interface{}) {
 }
 
 func respError(w http.ResponseWriter, errMsg string, code int) {
+	log.Print(errMsg)
 	params := ErrParams{Error: errMsg}
 	data, err := json.Marshal(params)
 	if err != nil {
@@ -128,6 +134,7 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 	}
 	w.WriteHeader(code)
 	w.Write(data)
+	log.Printf("Successfully responding with JSON")
 }
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
