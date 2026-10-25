@@ -1,20 +1,29 @@
 package main
 
-
-import _ github.com/lib/pq
-
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/Muhammad-Romli/Chirpy/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
-	fileserverHits atomic.Int32
+	FileServerHits atomic.Int32
+	DbQueries      *database.Queries
 }
 
 func main() {
+	dbUrl := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbUrl)\
+	dbQueries := database.New(db)
+	if err != nil {
+		log.Fatalf("Fail opening db: %w", err)
+	}
 	apiCfg := apiConfig{}
 	fmt.Printf("Hello, World!")
 	serverMux := http.NewServeMux()
@@ -28,7 +37,7 @@ func main() {
 		Handler: serverMux,
 		Addr:    ":8080",
 	}
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil {
 		log.Fatalf("Fail running the server")
 	}
