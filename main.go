@@ -97,17 +97,28 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	if len(params.Body) > 140 {
 		errMsg := "Chirp is too long"
-		errHandling(w, errMsg, 400)
+		respError(w, errMsg, 400)
 		return
 	}
-
-	w.WriteHeader(200)
-	w.Write([]byte(``))
-
+	resp := RespParams{Valid: true}
+	respJSON(w, 200, resp)
 }
-func errHandling(w http.ResponseWriter, errMsg string, code int) {
+
+func respError(w http.ResponseWriter, errMsg string, code int) {
 	errParams := RespParams{Error: errMsg}
 	data, err := json.Marshal(errParams)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"Something went wrong"}`))
+		return
+	}
+	w.WriteHeader(code)
+	w.Write(data)
+}
+
+func respJSON(w http.ResponseWriter, code int, payload interface{}) {
+	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
 		w.WriteHeader(500)
