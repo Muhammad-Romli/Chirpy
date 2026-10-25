@@ -19,12 +19,12 @@ type apiConfig struct {
 
 func main() {
 	dbUrl := os.Getenv("DB_URL")
-	db, err := sql.Open("postgres", dbUrl)\
+	db, err := sql.Open("postgres", dbUrl)
 	dbQueries := database.New(db)
 	if err != nil {
 		log.Fatalf("Fail opening db: %w", err)
 	}
-	apiCfg := apiConfig{}
+	apiCfg := apiConfig{DbQueries: dbQueries}
 	fmt.Printf("Hello, World!")
 	serverMux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
@@ -33,6 +33,7 @@ func main() {
 	serverMux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
 	serverMux.HandleFunc("POST /admin/reset", apiCfg.resetHandler)
 	serverMux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	serverMux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
 	server := http.Server{
 		Handler: serverMux,
 		Addr:    ":8080",

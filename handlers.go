@@ -6,6 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/Muhammad-Romli/Chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 type ReqParams struct {
@@ -18,6 +22,10 @@ type ErrParams struct {
 
 type RespParams struct {
 	CleanedBody string `json:"cleaned_body"`
+}
+
+type createUserRequest struct {
+	Email string `json:"email"`
 }
 
 func readinessHandler(w http.ResponseWriter, req *http.Request) {
@@ -38,7 +46,7 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
     <h1>Welcome, Chirpy Admin</h1>
     <p>Chirpy has been visited %d times!</p>
   </body>
-</html>`, cfg.fileserverHits.Load())
+</html>`, cfg.FileServerHits.Load())
 	_, err := w.Write([]byte(countStr))
 	if err != nil {
 		w.WriteHeader(500)
@@ -49,9 +57,9 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
 func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	count := cfg.fileserverHits.Load()
-	cfg.fileserverHits.Add(-count)
-	_, err := w.Write([]byte("fileserverHits count reseted."))
+	count := cfg.FileServerHits.Load()
+	cfg.FileServerHits.Add(-count)
+	_, err := w.Write([]byte("FileServerHits count reseted."))
 	if err != nil {
 		w.WriteHeader(500)
 		log.Printf("Fail writing response: %v", err)
@@ -60,20 +68,14 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
 
 func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		cfg.fileserverHits.Add(1)
+		cfg.FileServerHits.Add(1)
 		handler.ServeHTTP(w, req)
 	})
 }
 
 func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 	params := ReqParams{}
-	decoder := json.NewDecoder(req.Body)
-	err := decoder.Decode(&params)
-	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(500)
-		return
-	}
+	decodeReq(w, req, params)
 	if len(params.Body) > 140 {
 		errMsg := "Chirp is too long"
 		respError(w, errMsg, 400)
@@ -91,6 +93,16 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 	finishChirps := strings.Join(finishWords, " ")
 	resp := RespParams{CleanedBody: finishChirps}
 	respJSON(w, 200, resp)
+}
+
+func decodeReq(w http.ResponseWriter, req *http.Request, params interface{}) {
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&params)
+	if err != nil {
+		log.Printf("Error decoding parameters: %s", err)
+		w.WriteHeader(500)
+		return
+	}
 }
 
 func respError(w http.ResponseWriter, errMsg string, code int) {
@@ -116,4 +128,20 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 	}
 	w.WriteHeader(code)
 	w.Write(data)
+}
+
+func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
+	createUserParams := createUserRequest{}
+	decodeReq(w, req, createUserParams)
+	userParams := database.CreateUserParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email:     createUserParams.Email,
+	}
+	user, err := cfg.DbQueries.CreateUser(req.Context(), userParams)
+	if err != nil {
+		respError(w, fmt.Sprintf("fail creating user in database: %v", err), 500)
+	}
+	respJSON(w, 201, user)
 }
