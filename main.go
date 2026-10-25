@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,15 +12,25 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 }
 
+type ReqParams struct {
+	Body string `json:"body"`
+}
+
+type RespParams struct {
+	Error string `json:"error"`
+	Valid bool   `json:"valid"`
+}
+
 func main() {
 	apiCfg := apiConfig{}
 	fmt.Printf("Hello, World!")
 	serverMux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
 	serverMux.Handle("/app/", apiCfg.middlewareMetricsInc(appHandler))
-	serverMux.HandleFunc("/healthz", readinessHandler)
-	serverMux.HandleFunc("/metrics", apiCfg.metricsHandler)
-	serverMux.HandleFunc("/reset", apiCfg.resetHandler)
+	serverMux.HandleFunc("GET /api/healthz", readinessHandler)
+	serverMux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
+	serverMux.HandleFunc("POST /admin/reset", apiCfg.resetHandler)
+	serverMux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
 	server := http.Server{
 		Handler: serverMux,
 		Addr:    ":8080",
@@ -30,33 +41,41 @@ func main() {
 	}
 }
 
-func readinessHandler(respWriter http.ResponseWriter, req *http.Request) {
-	respWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	respWriter.WriteHeader(http.StatusOK)
-	_, err := respWriter.Write([]byte(http.StatusText(http.StatusOK)))
+func readinessHandler(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write([]byte(http.StatusText(http.StatusOK)))
 	if err != nil {
-		log.Printf("fail writing response: %v", err)
+		w.WriteHeader(500)
+		log.Printf("Fail writing response: %w", err)
 	}
 }
 
-func (cfg *apiConfig) metricsHandler(respWriter http.ResponseWriter, req *http.Request) {
-	respWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	respWriter.WriteHeader(http.StatusOK)
-	countStr := fmt.Sprintf("Hits: %d", cfg.fileserverHits.Load())
-	_, err := respWriter.Write([]byte(countStr))
+func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	countStr := fmt.Sprintf(`<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited %d times!</p>
+  </body>
+</html>`, cfg.fileserverHits.Load())
+	_, err := w.Write([]byte(countStr))
 	if err != nil {
-		log.Printf("fail writing response: %v", err)
+		w.WriteHeader(500)
+		log.Printf("Fail writing response: %w", err)
 	}
 }
 
-func (cfg *apiConfig) resetHandler(respWriter http.ResponseWriter, req *http.Request) {
-	respWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	respWriter.WriteHeader(http.StatusOK)
+func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	count := cfg.fileserverHits.Load()
 	cfg.fileserverHits.Add(-count)
-	_, err := respWriter.Write([]byte("fileserverHits count reseted."))
+	_, err := w.Write([]byte("fileserverHits count reseted."))
 	if err != nil {
-		log.Printf("fail writing response: %v", err)
+		w.WriteHeader(500)
+		log.Printf("Fail writing response: %w", err)
 	}
 }
 
@@ -65,4 +84,36 @@ func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
 		cfg.fileserverHits.Add(1)
 		handler.ServeHTTP(w, req)
 	})
+}
+
+func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
+	params := ReqParams{}
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&params)
+	if err != nil {
+		log.Printf("Error decoding parameters: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	if len(params.Body) > 140 {
+		errMsg := "Chirp is too long"
+		errHandling(w, errMsg, 400)
+		return
+	}
+
+	w.WriteHeader(200)
+	w.Write([]byte(``))
+
+}
+func errHandling(w http.ResponseWriter, errMsg string, code int) {
+	errParams := RespParams{Error: errMsg}
+	data, err := json.Marshal(errParams)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"Something went wrong"}`))
+		return
+	}
+	w.WriteHeader(code)
+	w.Write(data)
 }
