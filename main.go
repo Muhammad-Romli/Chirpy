@@ -47,7 +47,7 @@ func readinessHandler(w http.ResponseWriter, req *http.Request) {
 	_, err := w.Write([]byte(http.StatusText(http.StatusOK)))
 	if err != nil {
 		w.WriteHeader(500)
-		log.Printf("Fail writing response: %w", err)
+		log.Printf("Fail writing response: %v", err)
 	}
 }
 
@@ -63,7 +63,7 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
 	_, err := w.Write([]byte(countStr))
 	if err != nil {
 		w.WriteHeader(500)
-		log.Printf("Fail writing response: %w", err)
+		log.Printf("Fail writing response: %v", err)
 	}
 }
 
@@ -75,7 +75,7 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
 	_, err := w.Write([]byte("fileserverHits count reseted."))
 	if err != nil {
 		w.WriteHeader(500)
-		log.Printf("Fail writing response: %w", err)
+		log.Printf("Fail writing response: %v", err)
 	}
 }
 
