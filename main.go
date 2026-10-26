@@ -22,7 +22,7 @@ func main() {
 	db, err := sql.Open("postgres", dbUrl)
 	dbQueries := database.New(db)
 	if err != nil {
-		log.Fatalf("Fail opening db: %w", err)
+		log.Fatalf("Fail opening db: %v", err)
 	}
 	apiCfg := apiConfig{DbQueries: dbQueries}
 	fmt.Printf("Hello, World!")
