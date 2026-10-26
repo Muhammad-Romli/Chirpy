@@ -83,28 +83,6 @@ func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
 	})
 }
 
-func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
-	params := ReqParams{}
-	decodeReq(w, r, params)
-	if len(params.Body) > 140 {
-		errMsg := "Chirp is too long"
-		respError(w, errMsg, 400)
-		return
-	}
-	words := strings.Split(params.Body, " ")
-	finishWords := []string{}
-	for _, w := range words {
-		w = strings.ToLower(w)
-		if w == "kerfuffle" || w == "sharbert" || w == "fornax" {
-			w = "****"
-		}
-		finishWords = append(finishWords, w)
-	}
-	finishChirps := strings.Join(finishWords, " ")
-	resp := RespParams{CleanedBody: finishChirps}
-	respJSON(w, 200, resp)
-}
-
 func decodeReq(w http.ResponseWriter, r *http.Request, params interface{}) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&params)
@@ -182,8 +160,48 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 	respJSON(w, 200, user)
 }
 
-func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
+	createChirpParams := createChirpRequest{}
+	decodeReq(w, r, createChirpParams)
+	validateChirp(w, r, createChirpParams)
+	userID, err := uuid.Parse(createChirpParams.UserID)
 
+	if err != nil {
+		respError(w, "Cannot parse user ID", 400)
+		return
+	}
+	chirpParams := database.CreateChirpParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Body:      createChirpParams.Body,
+		UserID:    userID,
+	}
+	chirp, err := cfg.DbQueries.CreateChirp(r.Context(), chirpParams)
+	if err != nil {
+		respError(w, "Fail creating chirp", 500)
+	}
+	respJSON(w, 201, chirp)
+}
+
+func validateChirp(w http.ResponseWriter, r *http.Request, params createChirpRequest) {
+	if len(params.Body) > 140 {
+		errMsg := "Chirp is too long"
+		respError(w, errMsg, 400)
+		return
+	}
+	words := strings.Split(params.Body, " ")
+	finishWords := []string{}
+	for _, w := range words {
+		w = strings.ToLower(w)
+		if w == "kerfuffle" || w == "sharbert" || w == "fornax" {
+			w = "****"
+		}
+		finishWords = append(finishWords, w)
+	}
+	finishChirps := strings.Join(finishWords, " ")
+	resp := RespParams{CleanedBody: finishChirps}
+	respJSON(w, 200, resp)
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {

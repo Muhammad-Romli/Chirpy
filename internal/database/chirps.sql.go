@@ -7,12 +7,48 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
+const createChirp = `-- name: CreateChirp :one
+INSERT INTO chirps (id, created_at, updated_at, body, user_id)
+VALUES (
+    $1, $2, $3, $4, $5
+)
+RETURNING id, created_at, updated_at, body, user_id
+`
+
+type CreateChirpParams struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Body      string
+	UserID    uuid.UUID
+}
+
+func (q *Queries) CreateChirp(ctx context.Context, arg CreateChirpParams) (Chirp, error) {
+	row := q.db.QueryRowContext(ctx, createChirp,
+		arg.ID,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Body,
+		arg.UserID,
+	)
+	var i Chirp
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Body,
+		&i.UserID,
+	)
+	return i, err
+}
+
 const getChirp = `-- name: GetChirp :one
-SELECT id, created_at, updated_at, email FROM chirps
+SELECT id, created_at, updated_at, body, user_id FROM chirps
 WHERE id = $1
 `
 
@@ -23,13 +59,14 @@ func (q *Queries) GetChirp(ctx context.Context, id uuid.UUID) (Chirp, error) {
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Email,
+		&i.Body,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const getChirps = `-- name: GetChirps :many
-SELECT id, created_at, updated_at, email FROM chirps
+SELECT id, created_at, updated_at, body, user_id FROM chirps
 ORDER BY created_at ASC
 `
 
@@ -46,7 +83,8 @@ func (q *Queries) GetChirps(ctx context.Context) ([]Chirp, error) {
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.Email,
+			&i.Body,
+			&i.UserID,
 		); err != nil {
 			return nil, err
 		}
