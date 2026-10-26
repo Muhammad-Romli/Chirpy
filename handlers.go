@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	internal "github.com/Muhammad-Romli/Chirpy/internal/auth"
+	"github.com/Muhammad-Romli/Chirpy/internal/auth"
 	"github.com/Muhammad-Romli/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -125,7 +125,7 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	createUserParams := userRequest{}
 	decodeReq(w, r, createUserParams)
-	hashed_pw, err := internal.HashPassword(createUserParams.Password)
+	hashed_pw, err := auth.HashPassword(createUserParams.Password)
 	if err != nil {
 		respError(w, "", 500)
 	}
@@ -150,7 +150,7 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respError(w, fmt.Sprintf("Fail getting user data by email: %v", err), 404)
 	}
-	match, err := internal.CheckPasswordHash(userReq.Password, user.HashedPassword)
+	match, err := auth.CheckPasswordHash(userReq.Password, user.HashedPassword)
 	if !match {
 		respError(w, "password incorrect", 401)
 	}

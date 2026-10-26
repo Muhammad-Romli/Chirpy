@@ -15,6 +15,7 @@ import (
 type apiConfig struct {
 	FileServerHits atomic.Int32
 	DbQueries      *database.Queries
+	SecretJWT      string
 }
 
 func main() {
@@ -24,7 +25,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Fail opening db: %v", err)
 	}
-	apiCfg := apiConfig{DbQueries: dbQueries}
+	apiCfg := apiConfig{
+		DbQueries: dbQueries,
+		SecretJWT: os.Getenv("JWT_SECRET"),
+	}
 	fmt.Printf("Hello, World!")
 	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
