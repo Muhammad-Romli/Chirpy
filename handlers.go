@@ -146,7 +146,7 @@ func (cfg *apiConfig) getUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request) {
-	stringID := r.PathValue("chirpID")
+	stringID := r.PathValue("userID")
 	id, err := uuid.Parse(stringID)
 	if err != nil {
 		respError(w, "Cannot parse given ID", 404)
@@ -163,7 +163,7 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 	createChirpParams := createChirpRequest{}
 	decodeReq(w, r, createChirpParams)
-	validateChirp(w, r, createChirpParams)
+	validateChirp(w, createChirpParams)
 	userID, err := uuid.Parse(createChirpParams.UserID)
 
 	if err != nil {
@@ -184,7 +184,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	respJSON(w, 201, chirp)
 }
 
-func validateChirp(w http.ResponseWriter, r *http.Request, params createChirpRequest) {
+func validateChirp(w http.ResponseWriter, params createChirpRequest) {
 	if len(params.Body) > 140 {
 		errMsg := "Chirp is too long"
 		respError(w, errMsg, 400)

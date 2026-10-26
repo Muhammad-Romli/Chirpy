@@ -32,10 +32,12 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", readinessHandler)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
 	mux.HandleFunc("POST /admin/reset", apiCfg.resetHandler)
-	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
 	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
-	mux.HandleFunc("GET /api/chirps", apiCfg.getUsersHandler)
-	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getUserByIDHandler)
+	mux.HandleFunc("GET /api/users", apiCfg.getUsers)
+	mux.HandleFunc("GET /api/users/{userID}", apiCfg.getUserByIDHandler)
+	mux.HandleFunc("POST /api/chirps", apiCfg.createChirpHandler)
+	mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
 	server := http.Server{
 		Handler: mux,
 		Addr:    ":8080",
