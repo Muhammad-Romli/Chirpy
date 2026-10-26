@@ -44,13 +44,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const getChirp = `-- name: GetChirp :one
+const getUser = `-- name: GetUser :one
 SELECT id, created_at, updated_at, email FROM users
 WHERE id = $1
 `
 
-func (q *Queries) GetChirp(ctx context.Context, id uuid.UUID) (User, error) {
-	row := q.db.QueryRowContext(ctx, getChirp, id)
+func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUser, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -61,13 +61,12 @@ func (q *Queries) GetChirp(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const getChirps = `-- name: GetChirps :many
+const getUsers = `-- name: GetUsers :many
 SELECT id, created_at, updated_at, email FROM users
-ORDER BY created_at ASC
 `
 
-func (q *Queries) GetChirps(ctx context.Context) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, getChirps)
+func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, getUsers)
 	if err != nil {
 		return nil, err
 	}

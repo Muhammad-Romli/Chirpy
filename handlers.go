@@ -29,6 +29,11 @@ type createUserRequest struct {
 	Email string `json:"email"`
 }
 
+type createChirpRequest struct {
+	Body   string `json:"body"`
+	UserID string `json:"user_id"`
+}
+
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -153,10 +158,10 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 	respJSON(w, 201, user)
 }
 
-func (cfg *apiConfig) getUsersHandler(w http.ResponseWriter, r *http.Request) {
-	users, err := cfg.DbQueries.GetChirps(r.Context())
+func (cfg *apiConfig) getUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := cfg.DbQueries.GetUsers(r.Context())
 	if err != nil {
-		respError(w, "Fail getting chirps from db", 500)
+		respError(w, "Fail getting users from db", 500)
 		return
 	}
 	respJSON(w, 200, users)
@@ -166,13 +171,41 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 	stringID := r.PathValue("chirpID")
 	id, err := uuid.Parse(stringID)
 	if err != nil {
-		respError(w, "Cannot parse given ID", 400)
+		respError(w, "Cannot parse given ID", 404)
 		return
 	}
-	user, err := cfg.DbQueries.GetChirp(r.Context(), id)
+	user, err := cfg.DbQueries.GetUser(r.Context(), id)
+	if err != nil {
+		respError(w, "Fail getting user from db", 500)
+		return
+	}
+	respJSON(w, 200, user)
+}
+
+func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.DbQueries.GetChirps(r.Context())
+	if err != nil {
+		respError(w, "Fail getting chirps from db", 500)
+		return
+	}
+	respJSON(w, 200, chirps)
+}
+
+func (cfg *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request) {
+	stringID := r.PathValue("chirpID")
+	id, err := uuid.Parse(stringID)
+	if err != nil {
+		respError(w, "Cannot parse given ID", 404)
+		return
+	}
+	chirp, err := cfg.DbQueries.GetChirp(r.Context(), id)
 	if err != nil {
 		respError(w, "Fail getting chirp from db", 500)
 		return
 	}
-	respJSON(w, 200, user)
+	respJSON(w, 200, chirp)
 }
