@@ -27,13 +27,22 @@ type RespParams struct {
 }
 
 type userRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 type createChirpRequest struct {
 	Body   string `json:"body"`
 	UserID string `json:"user_id"`
+}
+
+type userResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
@@ -85,14 +94,14 @@ func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
 	})
 }
 
-func decodeReq(w http.ResponseWriter, r *http.Request, params interface{}) {
+func decodeReq(w http.ResponseWriter, r *http.Request, params any) error {
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&params)
-	if err != nil {
+	if err := decoder.Decode(params); err != nil {
 		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(500)
-		return
+		w.WriteHeader(http.StatusBadRequest)
+		return err
 	}
+	return nil
 }
 
 func respError(w http.ResponseWriter, errMsg string, code int) {
@@ -124,10 +133,13 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	createUserParams := userRequest{}
-	decodeReq(w, r, createUserParams)
+	err := decodeReq(w, r, createUserParams)
+	if err != nil {
+		respError(w, fmt.Sprintln("fail decoding request:", err), 500)
+	}
 	hashed_pw, err := auth.HashPassword(createUserParams.Password)
 	if err != nil {
-		respError(w, "", 500)
+		respError(w, fmt.Sprintln("fail hashing password", err), 500)
 	}
 	userParams := database.CreateUserParams{
 		ID:             uuid.New(),
@@ -145,16 +157,44 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 
 func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	userReq := userRequest{}
-	decodeReq(w, r, userReq)
+	err := decodeReq(w, r, &userReq)
+	if err != nil {
+		respError(w, fmt.Sprintln("fail decoding request:", err), 500)
+	}
+
 	user, err := cfg.DbQueries.GetUserByEmail(r.Context(), userReq.Email)
 	if err != nil {
-		respError(w, fmt.Sprintf("Fail getting user data by email: %v", err), 404)
+		respError(w, "incorrect email or password", 401)
+		return
 	}
+
 	match, err := auth.CheckPasswordHash(userReq.Password, user.HashedPassword)
-	if !match {
-		respError(w, "password incorrect", 401)
+	if err != nil || !match {
+		respError(w, "incorrect email or password", 401)
+		return
 	}
-	respJSON(w, 200, user)
+
+	expiresIn := time.Hour
+	if userReq.ExpiresInSeconds > 0 {
+		requested := time.Duration(userReq.ExpiresInSeconds) * time.Second
+		if requested < time.Hour {
+			expiresIn = requested
+		}
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expiresIn)
+	if err != nil {
+		respError(w, "couldn't create token", 500)
+		return
+	}
+
+	respJSON(w, 200, userResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+		Token:     token,
+	})
 }
 
 func (cfg *apiConfig) getUsers(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +223,10 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 	createChirpParams := createChirpRequest{}
-	decodeReq(w, r, createChirpParams)
+	err := decodeReq(w, r, createChirpParams)
+	if err != nil {
+		respError(w, fmt.Sprintln("fail decoding request:", err), 500)
+	}
 	validateChirp(w, createChirpParams)
 	userID, err := uuid.Parse(createChirpParams.UserID)
 
