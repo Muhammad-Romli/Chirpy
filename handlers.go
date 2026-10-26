@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	internal "github.com/Muhammad-Romli/Chirpy/internal/auth"
 	"github.com/Muhammad-Romli/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -25,8 +26,9 @@ type RespParams struct {
 	CleanedBody string `json:"cleaned_body"`
 }
 
-type createUserRequest struct {
-	Email string `json:"email"`
+type userRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type createChirpRequest struct {
@@ -121,19 +123,38 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 }
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
-	createUserParams := createUserRequest{}
+	createUserParams := userRequest{}
 	decodeReq(w, r, createUserParams)
+	hashed_pw, err := internal.HashPassword(createUserParams.Password)
+	if err != nil {
+		respError(w, "", 500)
+	}
 	userParams := database.CreateUserParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email:     createUserParams.Email,
+		ID:             uuid.New(),
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Email:          createUserParams.Email,
+		HashedPassword: hashed_pw,
 	}
 	user, err := cfg.DbQueries.CreateUser(r.Context(), userParams)
 	if err != nil {
 		respError(w, fmt.Sprintf("Fail creating user in database: %v", err), 500)
 	}
 	respJSON(w, 201, user)
+}
+
+func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
+	userReq := userRequest{}
+	decodeReq(w, r, userReq)
+	user, err := cfg.DbQueries.GetUserByEmail(r.Context(), userReq.Email)
+	if err != nil {
+		respError(w, fmt.Sprintf("Fail getting user data by email: %v", err), 404)
+	}
+	match, err := internal.CheckPasswordHash(userReq.Password, user.HashedPassword)
+	if !match {
+		respError(w, "password incorrect", 401)
+	}
+	respJSON(w, 200, user)
 }
 
 func (cfg *apiConfig) getUsers(w http.ResponseWriter, r *http.Request) {
