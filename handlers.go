@@ -82,9 +82,13 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	count := cfg.FileServerHits.Load()
 	cfg.FileServerHits.Add(-count)
 	_, err := w.Write([]byte("FileServerHits count reseted."))
-	respError(w, fmt.Sprintf("Fail writing response: %v", err), 500)
+	if err != nil {
+		respError(w, fmt.Sprintf("Fail writing response: %v", err), 500)
+	}
 	err = cfg.DbQueries.ResetUsers(r.Context())
-	respError(w, fmt.Sprintf("fail resetting users in database: %v", err), 500)
+	if err != nil {
+		respError(w, fmt.Sprintf("fail resetting users in database: %v", err), 500)
+	}
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
@@ -94,7 +98,7 @@ func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
 	})
 }
 
-func decodeReq(w http.ResponseWriter, r *http.Request, params any) error {
+func decodeReq[T any](w http.ResponseWriter, r *http.Request, params *T) error {
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(params); err != nil {
 		log.Printf("Error decoding parameters: %s", err)
@@ -133,13 +137,15 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	createUserParams := userRequest{}
-	err := decodeReq(w, r, createUserParams)
+	err := decodeReq(w, r, &createUserParams)
 	if err != nil {
 		respError(w, fmt.Sprintln("fail decoding request:", err), 500)
+		return
 	}
 	hashed_pw, err := auth.HashPassword(createUserParams.Password)
 	if err != nil {
 		respError(w, fmt.Sprintln("fail hashing password", err), 500)
+		return
 	}
 	userParams := database.CreateUserParams{
 		ID:             uuid.New(),
@@ -151,6 +157,7 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 	user, err := cfg.DbQueries.CreateUser(r.Context(), userParams)
 	if err != nil {
 		respError(w, fmt.Sprintf("Fail creating user in database: %v", err), 500)
+		return
 	}
 	respJSON(w, 201, user)
 }
@@ -160,6 +167,7 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	err := decodeReq(w, r, &userReq)
 	if err != nil {
 		respError(w, fmt.Sprintln("fail decoding request:", err), 500)
+		return
 	}
 
 	user, err := cfg.DbQueries.GetUserByEmail(r.Context(), userReq.Email)
@@ -182,7 +190,7 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expiresIn)
+	token, err := auth.MakeJWT(user.ID, cfg.SecretJWT, expiresIn)
 	if err != nil {
 		respError(w, "couldn't create token", 500)
 		return
@@ -223,9 +231,10 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 	createChirpParams := createChirpRequest{}
-	err := decodeReq(w, r, createChirpParams)
+	err := decodeReq(w, r, &createChirpParams)
 	if err != nil {
 		respError(w, fmt.Sprintln("fail decoding request:", err), 500)
+		return
 	}
 	validateChirp(w, createChirpParams)
 	userID, err := uuid.Parse(createChirpParams.UserID)
@@ -244,6 +253,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	chirp, err := cfg.DbQueries.CreateChirp(r.Context(), chirpParams)
 	if err != nil {
 		respError(w, "Fail creating chirp", 500)
+		return
 	}
 	respJSON(w, 201, chirp)
 }
@@ -269,6 +279,16 @@ func validateChirp(w http.ResponseWriter, params createChirpRequest) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respError(w, fmt.Sprintf("fail getting token from bearer: %v", err), http.StatusBadRequest)
+		return
+	}
+	_, err = auth.ValidateJWT(token, cfg.SecretJWT)
+	if err != nil {
+		respError(w, "JWT is invalid", 401)
+		return
+	}
 	chirps, err := cfg.DbQueries.GetChirps(r.Context())
 	if err != nil {
 		respError(w, "Fail getting chirps from db", 500)
