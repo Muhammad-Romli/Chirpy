@@ -29,7 +29,7 @@ type createUserRequest struct {
 	Email string `json:"email"`
 }
 
-func readinessHandler(w http.ResponseWriter, req *http.Request) {
+func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte(http.StatusText(http.StatusOK)))
@@ -39,7 +39,7 @@ func readinessHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	countStr := fmt.Sprintf(`<html>
@@ -55,7 +55,7 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	if os.Getenv("PLATFORM") != "dev" {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte("Reset is only allowed in dev environment."))
@@ -67,20 +67,20 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, req *http.Request) {
 	cfg.FileServerHits.Add(-count)
 	_, err := w.Write([]byte("FileServerHits count reseted."))
 	respError(w, fmt.Sprintf("Fail writing response: %v", err), 500)
-	err = cfg.DbQueries.ResetUsers(req.Context())
+	err = cfg.DbQueries.ResetUsers(r.Context())
 	respError(w, fmt.Sprintf("fail resetting users in database: %v", err), 500)
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.FileServerHits.Add(1)
-		handler.ServeHTTP(w, req)
+		handler.ServeHTTP(w, r)
 	})
 }
 
-func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
+func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
 	params := ReqParams{}
-	decodeReq(w, req, params)
+	decodeReq(w, r, params)
 	if len(params.Body) > 140 {
 		errMsg := "Chirp is too long"
 		respError(w, errMsg, 400)
@@ -100,8 +100,8 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 	respJSON(w, 200, resp)
 }
 
-func decodeReq(w http.ResponseWriter, req *http.Request, params interface{}) {
-	decoder := json.NewDecoder(req.Body)
+func decodeReq(w http.ResponseWriter, r *http.Request, params interface{}) {
+	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&params)
 	if err != nil {
 		log.Printf("Error decoding parameters: %s", err)
@@ -137,18 +137,39 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 	log.Printf("Successfully responding with JSON")
 }
 
-func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	createUserParams := createUserRequest{}
-	decodeReq(w, req, createUserParams)
+	decodeReq(w, r, createUserParams)
 	userParams := database.CreateUserParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Email:     createUserParams.Email,
 	}
-	user, err := cfg.DbQueries.CreateUser(req.Context(), userParams)
+	user, err := cfg.DbQueries.CreateUser(r.Context(), userParams)
 	if err != nil {
-		respError(w, fmt.Sprintf("fail creating user in database: %v", err), 500)
+		respError(w, fmt.Sprintf("Fail creating user in database: %v", err), 500)
 	}
 	respJSON(w, 201, user)
+}
+
+func (cfg *apiConfig) getUsersHandler(w http.ResponseWriter, r *http.Request) {
+	users, err := cfg.DbQueries.GetChirps(r.Context())
+	if err != nil {
+		respError(w, "Fail getting chirps from db", 500)
+	}
+	respJSON(w, 200, users)
+}
+
+func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request) {
+	stringID := r.PathValue("chirpID")
+	id, err := uuid.Parse(stringID)
+	if err != nil {
+		respError(w, "Cannot parse given ID", 400)
+	}
+	user, err := cfg.DbQueries.GetChirp(r.Context(), id)
+	if err != nil {
+		respError(w, "Fail getting chirp from db", 500)
+	}
+	respJSON(w, 200, user)
 }

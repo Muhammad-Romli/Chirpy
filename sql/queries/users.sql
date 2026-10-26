@@ -7,3 +7,11 @@ RETURNING *;
 
 -- name: ResetUsers :exec
 DELETE FROM users;
+
+-- name: GetChirps :many
+SELECT * FROM users
+ORDER BY created_at ASC;
+
+-- name: GetChirp :one
+SELECT * FROM users
+WHERE id = $1;

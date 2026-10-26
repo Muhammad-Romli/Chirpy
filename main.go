@@ -26,16 +26,18 @@ func main() {
 	}
 	apiCfg := apiConfig{DbQueries: dbQueries}
 	fmt.Printf("Hello, World!")
-	serverMux := http.NewServeMux()
+	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
-	serverMux.Handle("/app/", apiCfg.middlewareMetricsInc(appHandler))
-	serverMux.HandleFunc("GET /api/healthz", readinessHandler)
-	serverMux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
-	serverMux.HandleFunc("POST /admin/reset", apiCfg.resetHandler)
-	serverMux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
-	serverMux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
+	mux.Handle("/app/", apiCfg.middlewareMetricsInc(appHandler))
+	mux.HandleFunc("GET /api/healthz", readinessHandler)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
+	mux.HandleFunc("POST /admin/reset", apiCfg.resetHandler)
+	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
+	mux.HandleFunc("GET /api/chirps", apiCfg.getUsersHandler)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getUserByIDHandler)
 	server := http.Server{
-		Handler: serverMux,
+		Handler: mux,
 		Addr:    ":8080",
 	}
 	err = server.ListenAndServe()
