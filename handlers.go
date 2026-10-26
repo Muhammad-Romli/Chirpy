@@ -157,6 +157,7 @@ func (cfg *apiConfig) getUsersHandler(w http.ResponseWriter, r *http.Request) {
 	users, err := cfg.DbQueries.GetChirps(r.Context())
 	if err != nil {
 		respError(w, "Fail getting chirps from db", 500)
+		return
 	}
 	respJSON(w, 200, users)
 }
@@ -166,10 +167,12 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 	id, err := uuid.Parse(stringID)
 	if err != nil {
 		respError(w, "Cannot parse given ID", 400)
+		return
 	}
 	user, err := cfg.DbQueries.GetChirp(r.Context(), id)
 	if err != nil {
 		respError(w, "Fail getting chirp from db", 500)
+		return
 	}
 	respJSON(w, 200, user)
 }
