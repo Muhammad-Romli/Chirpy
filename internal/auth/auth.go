@@ -80,4 +80,5 @@ func GetBearerToken(headers http.Header) (string, error) {
 	if !ok {
 		return "", errors.New("malformed Authorization header")
 	}
+	return strings.TrimSpace(token), nil
 }
