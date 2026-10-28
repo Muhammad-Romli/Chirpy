@@ -38,11 +38,12 @@ type createChirpRequest struct {
 }
 
 type userResponse struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
@@ -192,16 +193,22 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.MakeJWT(user.ID, cfg.SecretJWT, expiresIn)
 	if err != nil {
-		respError(w, "couldn't create token", 500)
+		respError(w, "Fail creating JWT token", 500)
 		return
 	}
 
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respError(w, "Fail creating refresh token", 500)
+	}
+
 	respJSON(w, 200, userResponse{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-		Token:     token,
+		ID:           user.ID,
+		CreatedAt:    user.CreatedAt,
+		UpdatedAt:    user.UpdatedAt,
+		Email:        user.Email,
+		Token:        token,
+		RefreshToken: refreshToken,
 	})
 }
 
