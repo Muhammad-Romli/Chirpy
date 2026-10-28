@@ -14,23 +14,23 @@ import (
 )
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens(refresh_token, created_at, updated_at, user_id, expires_at, revoked_at)
+INSERT INTO refresh_tokens(token, created_at, updated_at, user_id, expires_at, revoked_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING refresh_token, created_at, updated_at, user_id, expires_at, revoked_at
+RETURNING token, created_at, updated_at, user_id, expires_at, revoked_at
 `
 
 type CreateRefreshTokenParams struct {
-	RefreshToken string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	UserID       uuid.UUID
-	ExpiresAt    time.Time
-	RevokedAt    sql.NullTime
+	Token     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
 	row := q.db.QueryRowContext(ctx, createRefreshToken,
-		arg.RefreshToken,
+		arg.Token,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.UserID,
@@ -39,7 +39,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 	)
 	var i RefreshToken
 	err := row.Scan(
-		&i.RefreshToken,
+		&i.Token,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
@@ -50,7 +50,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 }
 
 const getRefreshToken = `-- name: GetRefreshToken :one
-SELECT refresh_token, created_at, updated_at, user_id, expires_at, revoked_at FROM refresh_tokens
+SELECT token, created_at, updated_at, user_id, expires_at, revoked_at FROM refresh_tokens
 WHERE user_id = $1
 `
 
@@ -58,12 +58,33 @@ func (q *Queries) GetRefreshToken(ctx context.Context, userID uuid.UUID) (Refres
 	row := q.db.QueryRowContext(ctx, getRefreshToken, userID)
 	var i RefreshToken
 	err := row.Scan(
-		&i.RefreshToken,
+		&i.Token,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getUserFromRefreshToken = `-- name: GetUserFromRefreshToken :one
+SELECT users.id, users.created_at, users.updated_at, users.email, users.hashed_password
+FROM refresh_tokens
+INNER JOIN users ON refresh_tokens.user_id = users.id
+WHERE refresh_tokens.token = $1
+  AND refresh_tokens.revoked_at IS NULL
+`
+
+func (q *Queries) GetUserFromRefreshToken(ctx context.Context, token string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserFromRefreshToken, token)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.HashedPassword,
 	)
 	return i, err
 }

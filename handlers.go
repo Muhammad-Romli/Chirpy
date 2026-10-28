@@ -26,6 +26,10 @@ type RespParams struct {
 	CleanedBody string `json:"cleaned_body"`
 }
 
+type RefreshTokenReq struct {
+	Token string `json:"token"`
+}
+
 type userRequest struct {
 	Email            string `json:"email"`
 	Password         string `json:"password"`
@@ -145,7 +149,7 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 		respError(w, "fail decoding request:", 500, err)
 		return
 	}
-	hashed_pw, err := auth.HashPassword(createUserParams.Password)
+	hashed_pw, err := auth.HashPassword(createUserParams.Email)
 	if err != nil {
 		respError(w, "fail hashing password", 500, err)
 		return
@@ -162,14 +166,19 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 		respError(w, "Fail creating user in database", 500, err)
 		return
 	}
-	respJSON(w, 201, user)
+	respJSON(w, 201, userResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	})
 }
 
 func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	userReq := userRequest{}
 	err := decodeReq(w, r, &userReq)
 	if err != nil {
-		respError(w, "fail decoding request:", 500, err)
+		respError(w, "fail decoding request:", 400, err)
 		return
 	}
 
@@ -206,11 +215,11 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := database.CreateRefreshTokenParams{
-		RefreshToken: refreshToken,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		UserID:       user.ID,
-		ExpiresAt:    time.Now().Add(60 * 24 * time.Hour),
+		Token:     refreshToken,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
 	}
 
 	_, err = cfg.DbQueries.CreateRefreshToken(r.Context(), params)
@@ -333,4 +342,20 @@ func (cfg *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 	respJSON(w, 200, chirp)
+}
+
+func (cfg *apiConfig) getTokenFromRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respError(w, "fail getting token from header", 400, err)
+	}
+	user, err := cfg.DbQueries.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respError(w, "fail getting user info from db", 500, err)
+	}
+	token, err := auth.MakeJWT(user.ID, cfg.SecretJWT, 1*time.Hour)
+	if err != nil {
+		respError(w, "fail making JWT token", 500, err)
+	}
+	respJSON(w, 201, token)
 }
