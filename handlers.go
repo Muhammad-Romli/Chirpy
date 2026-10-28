@@ -130,6 +130,11 @@ func respError(w http.ResponseWriter, msg string, code int, err error) {
 }
 
 func respJSON(w http.ResponseWriter, code int, payload interface{}) {
+	if payload == nil || code == 204 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
@@ -368,4 +373,5 @@ func (cfg *apiConfig) revokeRefreshTokenHandler(w http.ResponseWriter, r *http.R
 	if err = cfg.DbQueries.RevokeToken(r.Context(), refreshToken); err != nil {
 		respError(w, "fail revoking token in db", 500, err)
 	}
+	respJSON(w, 204, nil)
 }
