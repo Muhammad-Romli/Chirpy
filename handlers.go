@@ -344,7 +344,7 @@ func (cfg *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request
 	respJSON(w, 200, chirp)
 }
 
-func (cfg *apiConfig) getTokenFromRefreshToken(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) getTokenFromRefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respError(w, "fail getting token from header", 400, err)
@@ -358,4 +358,14 @@ func (cfg *apiConfig) getTokenFromRefreshToken(w http.ResponseWriter, r *http.Re
 		respError(w, "fail making JWT token", 500, err)
 	}
 	respJSON(w, 201, token)
+}
+
+func (cfg *apiConfig) revokeRefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respError(w, "fail getting token from header", 400, err)
+	}
+	if err = cfg.DbQueries.RevokeToken(r.Context(), refreshToken); err != nil {
+		respError(w, "fail revoking token in db", 500, err)
+	}
 }
