@@ -42,12 +42,15 @@ type createChirpRequest struct {
 }
 
 type userResponse struct {
-	ID           uuid.UUID `json:"id"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Email        string    `json:"email"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+type loginResponse struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
@@ -149,8 +152,7 @@ func respJSON(w http.ResponseWriter, code int, payload interface{}) {
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	createUserParams := userRequest{}
-	err := decodeReq(w, r, &createUserParams)
-	if err != nil {
+	if err := decodeReq(w, r, &createUserParams); err != nil {
 		respError(w, "fail decoding request:", 500, err)
 		return
 	}
@@ -233,13 +235,44 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respJSON(w, 200, userResponse{
-		ID:           user.ID,
-		CreatedAt:    user.CreatedAt,
-		UpdatedAt:    user.UpdatedAt,
-		Email:        user.Email,
+	respJSON(w, 200, loginResponse{
 		Token:        token,
 		RefreshToken: refreshToken,
+	})
+}
+
+func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) {
+	userReq := userRequest{}
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respError(w, "fail getting token from header", 400, err)
+	}
+	userId, err := auth.ValidateJWT(token, cfg.SecretJWT)
+	if err != nil {
+		respError(w, "Unauthorized: Invalid or expired JWT token", 401, err)
+	}
+	err = decodeReq(w, r, &userReq)
+	if err != nil {
+		respError(w, "fail decoding request to json", 400, err)
+	}
+	hashedPassword, err := auth.HashPassword(userReq.Password)
+	if err != nil {
+		respError(w, "fail hashing password", 500, err)
+	}
+	params := database.UpdateUserParams{
+		Email:          userReq.Email,
+		HashedPassword: hashedPassword,
+		ID:             userId,
+	}
+	user, err := cfg.DbQueries.UpdateUser(r.Context(), params)
+	if err != nil {
+		respError(w, "fail updating user data in database", 500, err)
+	}
+	respJSON(w, 200, userResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
 	})
 }
 

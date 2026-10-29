@@ -62,7 +62,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 
 	claims, ok := parsedToken.Claims.(*jwt.RegisteredClaims)
 	if !ok {
-		return uuid.Nil, fmt.Errorf("invalid token claims")
+		return uuid.Nil, errors.New("invalid token claims")
 	}
 
 	subject := claims.Subject
@@ -82,7 +82,11 @@ func GetBearerToken(headers http.Header) (string, error) {
 	if !ok {
 		return "", errors.New("malformed Authorization header")
 	}
-	return strings.TrimSpace(token), nil
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", errors.New("token is empty")
+	}
+	return token, nil
 }
 
 func MakeRefreshToken() (string, error) {

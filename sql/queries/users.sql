@@ -18,3 +18,12 @@ WHERE id = $1;
 -- name: GetUserByEmail :one
 SELECT * FROM users
 WHERE email = $1;
+
+-- name: UpdateUser :one
+UPDATE users
+SET 
+    email = sqlc.arg(email),
+    hashed_password = sqlc.arg(hashed_password),
+    updated_at = sqlc.arg(updated_time) -- Using parameter instead NOW() to synchronize
+WHERE id = sqlc.arg(id)
+RETURNING *;
