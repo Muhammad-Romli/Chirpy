@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -55,6 +57,13 @@ type loginResponse struct {
 
 type chirpIdRequest struct {
 	ChirpID string `json:"id"`
+}
+
+type premiumPurchaseRequest struct {
+	Event string `json:"event"`
+	Data  struct {
+		UserID string `json:"user_id"`
+	} `json:"data"`
 }
 
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +279,9 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	user, err := cfg.DbQueries.UpdateUser(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "specified  does not exist", 404, err)
+		}
 		respError(w, "fail updating user data in database", 500, err)
 	}
 	respJSON(w, 200, userResponse{
@@ -298,6 +310,9 @@ func (cfg *apiConfig) getUserByIDHandler(w http.ResponseWriter, r *http.Request)
 	}
 	user, err := cfg.DbQueries.GetUser(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "specified user does not exist", 404, err)
+		}
 		respError(w, "Fail getting user from db", 500, err)
 		return
 	}
@@ -380,6 +395,9 @@ func (cfg *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request
 	}
 	chirp, err := cfg.DbQueries.GetChirp(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "specified chirp does not exist", 404, err)
+		}
 		respError(w, "Fail getting chirp from db", 500, err)
 		return
 	}
@@ -408,6 +426,9 @@ func (cfg *apiConfig) revokeRefreshTokenHandler(w http.ResponseWriter, r *http.R
 		respError(w, "fail getting token from header", 400, err)
 	}
 	if err = cfg.DbQueries.RevokeToken(r.Context(), refreshToken); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "specified refresh token does not exist", 404, err)
+		}
 		respError(w, "fail revoking token in db", 500, err)
 	}
 	respJSON(w, 204, nil)
@@ -444,8 +465,32 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err = cfg.DbQueries.DeleteChirp(r.Context(), parsedChirpId); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "specfied post does not exist", 404, err)
+		}
 		respError(w, "fail deleting chirp", 500, err)
 		return
+	}
+	respJSON(w, 204, nil)
+}
+
+func (cfg *apiConfig) premiumPurchaseHandler(w http.ResponseWriter, r *http.Request) {
+	premiumReq := premiumPurchaseRequest{}
+	if err := decodeReq(w, r, &premiumReq); err != nil {
+		respError(w, "fail decoding request", 400, err)
+	}
+	if premiumReq.Event != "user.upgraded" {
+		respJSON(w, 204, nil)
+	}
+	userIdParsed, err := uuid.Parse(premiumReq.Data.UserID)
+	if err != nil {
+		respError(w, "fail parsing user id to uuid", 400, err)
+	}
+	if err = cfg.DbQueries.PremiumPurchase(r.Context(), userIdParsed); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "specified user not found", 404, err)
+		}
+		respError(w, "fail changing purchase status", 500, err)
 	}
 	respJSON(w, 204, nil)
 }

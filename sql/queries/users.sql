@@ -27,3 +27,12 @@ SET
     updated_at = sqlc.arg(updated_time) -- Using parameter instead NOW() to synchronize
 WHERE id = sqlc.arg(id)
 RETURNING *;
+
+
+-- <------------------------------ PREMIUM ------------------------------------------->
+
+-- name: PremiumPurchase :exec
+UPDATE users
+SET is_chirpy_red = true
+WHERE id = $1
+RETURNING *;

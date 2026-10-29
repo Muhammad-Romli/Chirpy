@@ -18,4 +18,5 @@ WHERE refresh_tokens.token = $1
 -- name: RevokeToken :exec
 UPDATE refresh_tokens
 SET token = NOW()
-WHERE token = $1;
+WHERE token = $1
+RETURNING *;
