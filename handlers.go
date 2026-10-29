@@ -53,6 +53,10 @@ type loginResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type chirpIdRequest struct {
+	ChirpID string `json:"id"`
+}
+
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -405,6 +409,43 @@ func (cfg *apiConfig) revokeRefreshTokenHandler(w http.ResponseWriter, r *http.R
 	}
 	if err = cfg.DbQueries.RevokeToken(r.Context(), refreshToken); err != nil {
 		respError(w, "fail revoking token in db", 500, err)
+	}
+	respJSON(w, 204, nil)
+}
+
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
+	chirpIdReq := chirpIdRequest{}
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respError(w, "fail getting token from header", 400, err)
+		return
+	}
+	userId, err := auth.ValidateJWT(token, cfg.SecretJWT)
+	if err != nil {
+		respError(w, "fJWT token invalid or expired", 400, err)
+		return
+	}
+	if err := decodeReq(w, r, &chirpIdReq); err != nil {
+		respError(w, "fail decoding request", 400, err)
+		return
+	}
+	parsedChirpId, err := uuid.Parse(chirpIdReq.ChirpID)
+	if err != nil {
+		respError(w, "fail parsing chirp Id to uuid", 400, err)
+		return
+	}
+	chirp, err := cfg.DbQueries.GetChirp(r.Context(), parsedChirpId)
+	if err != nil {
+		respError(w, "fail getting chirp data", 404, err)
+		return
+	}
+	if chirp.UserID != userId {
+		respError(w, "you not the author of the chirp", 403, err)
+		return
+	}
+	if err = cfg.DbQueries.DeleteChirp(r.Context(), parsedChirpId); err != nil {
+		respError(w, "fail deleting chirp", 500, err)
+		return
 	}
 	respJSON(w, 204, nil)
 }
