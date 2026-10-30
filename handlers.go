@@ -475,22 +475,36 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (cfg *apiConfig) premiumPurchaseHandler(w http.ResponseWriter, r *http.Request) {
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respError(w, fmt.Sprintf("failed getting api  key: %v", err), 400, err) // This one is okay if we give the raw error too
+		return
+	}
+	if apiKey != cfg.PolkaKey {
+		respError(w, "api key did not match", 401, fmt.Errorf("api key did not match"))
+		return
+	}
 	premiumReq := premiumPurchaseRequest{}
 	if err := decodeReq(w, r, &premiumReq); err != nil {
 		respError(w, "fail decoding request", 400, err)
+		return
 	}
 	if premiumReq.Event != "user.upgraded" {
 		respJSON(w, 204, nil)
+		return
 	}
 	userIdParsed, err := uuid.Parse(premiumReq.Data.UserID)
 	if err != nil {
 		respError(w, "fail parsing user id to uuid", 400, err)
+		return
 	}
 	if err = cfg.DbQueries.PremiumPurchase(r.Context(), userIdParsed); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respError(w, "specified user not found", 404, err)
+			return
 		}
 		respError(w, "fail changing purchase status", 500, err)
+		return
 	}
 	respJSON(w, 204, nil)
 }

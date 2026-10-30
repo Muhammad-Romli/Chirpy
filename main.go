@@ -16,10 +16,12 @@ type apiConfig struct {
 	FileServerHits atomic.Int32
 	DbQueries      *database.Queries
 	SecretJWT      string
+	PolkaKey       string
 }
 
 func main() {
 	dbUrl := os.Getenv("DB_URL")
+
 	db, err := sql.Open("postgres", dbUrl)
 	dbQueries := database.New(db)
 	if err != nil {
@@ -28,6 +30,7 @@ func main() {
 	apiCfg := apiConfig{
 		DbQueries: dbQueries,
 		SecretJWT: os.Getenv("JWT_SECRET"),
+		PolkaKey:  os.Getenv("POLKA_KEY"),
 	}
 	fmt.Printf("Hello, World!")
 	mux := http.NewServeMux()
