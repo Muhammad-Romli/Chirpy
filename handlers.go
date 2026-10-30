@@ -338,7 +338,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Body:      createChirpParams.Body,
-		UserID:    userID,
+		AuthorID:  userID,
 	}
 	chirp, err := cfg.DbQueries.CreateChirp(r.Context(), chirpParams)
 	if err != nil {
@@ -368,6 +368,8 @@ func validateChirp(w http.ResponseWriter, params createChirpRequest) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	stringAuthorId := r.URL.Query().Get("authorId")
+	parsedAuthorId, err := uuid.Parse(stringAuthorId)
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respError(w, "fail getting token from bearer", http.StatusBadRequest, err)
@@ -378,9 +380,26 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
 		respError(w, "JWT is invalid", 401, err)
 		return
 	}
-	chirps, err := cfg.DbQueries.GetChirps(r.Context())
+	if parsedAuthorId == uuid.Nil {
+		chirps, err := cfg.DbQueries.GetChirps(r.Context())
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				respError(w, "there is no chirps for that user", 404, err)
+				return
+			}
+			respError(w, "fail getting chirps from db", 500, err)
+			return
+		}
+		respJSON(w, 200, chirps)
+		return
+	}
+	chirps, err := cfg.DbQueries.GetChirpsFilterAuthorId(r.Context(), parsedAuthorId)
 	if err != nil {
-		respError(w, "Fail getting chirps from db", 500, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			respError(w, "there is no chirps for that user", 404, err)
+			return
+		}
+		respError(w, "fail getting chirps from db", 500, err)
 		return
 	}
 	respJSON(w, 200, chirps)
@@ -464,7 +483,7 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request)
 		respError(w, "you not the author of the chirp", 403, err)
 		return
 	}
-	if err = cfg.DbQueries.DeleteChirp(r.Context(), parsedChirpId); err != nil {
+	if _, err = cfg.DbQueries.DeleteChirp(r.Context(), parsedChirpId); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respError(w, "specfied post does not exist", 404, err)
 		}
