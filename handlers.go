@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -368,41 +369,42 @@ func validateChirp(w http.ResponseWriter, params createChirpRequest) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	stringAuthorId := r.URL.Query().Get("authorId")
-	parsedAuthorId, err := uuid.Parse(stringAuthorId)
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respError(w, "fail getting token from bearer", http.StatusBadRequest, err)
 		return
 	}
-	_, err = auth.ValidateJWT(token, cfg.SecretJWT)
-	if err != nil {
-		respError(w, "JWT is invalid", 401, err)
+	if _, err = auth.ValidateJWT(token, cfg.SecretJWT); err != nil {
+		respError(w, "JWT is invalid", http.StatusUnauthorized, err)
 		return
 	}
-	if parsedAuthorId == uuid.Nil {
-		chirps, err := cfg.DbQueries.GetChirps(r.Context())
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				respError(w, "there is no chirps for that user", 404, err)
-				return
-			}
-			respError(w, "fail getting chirps from db", 500, err)
+
+	sortType := strings.ToLower(r.URL.Query().Get("sort"))
+	authorIDStr := r.URL.Query().Get("author_id")
+
+	var chirps []database.Chirp
+	if authorIDStr == "" {
+		chirps, err = cfg.DbQueries.GetChirps(r.Context())
+	} else {
+		authorID, parseErr := uuid.Parse(authorIDStr)
+		if parseErr != nil {
+			respError(w, "invalid author_id", http.StatusBadRequest, parseErr)
 			return
 		}
-		respJSON(w, 200, chirps)
-		return
+		chirps, err = cfg.DbQueries.GetChirpsFilterAuthorId(r.Context(), authorID)
 	}
-	chirps, err := cfg.DbQueries.GetChirpsFilterAuthorId(r.Context(), parsedAuthorId)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			respError(w, "there is no chirps for that user", 404, err)
-			return
-		}
-		respError(w, "fail getting chirps from db", 500, err)
+		respError(w, "fail getting chirps from db", http.StatusInternalServerError, err)
 		return
 	}
-	respJSON(w, 200, chirps)
+
+	if sortType == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
+	}
+
+	respJSON(w, http.StatusOK, chirps)
 }
 
 func (cfg *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request) {
