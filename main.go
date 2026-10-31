@@ -32,7 +32,7 @@ func main() {
 		SecretJWT: os.Getenv("JWT_SECRET"),
 		PolkaKey:  os.Getenv("POLKA_KEY"),
 	}
-	fmt.Printf("Hello, World!")
+	fmt.Printf("Starting server!")
 	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(appHandler))
